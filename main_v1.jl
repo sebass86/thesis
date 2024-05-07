@@ -245,9 +245,9 @@ end
 # Parameters
 #   params = [γ, ψ, λ, π_H, π_L, r,ω,RH,RL]  # Set your parameter values here
 params = [3.0,0.40,0.15,0.80, 0.20, 0.80, 2.0, 1.5,1.065,0.94] 
-yn = 100
+yn = 1000
 τn = 100
-cn = 200
+cn = 100
 
 # Grids
 y_grid = collect(range(0.10,stop=0.50,length=yn))
@@ -326,5 +326,5 @@ xvec = ones(τn,1).*2 .- yvec
 all_data = hcat(τ_grid, util, wavec, prob, yvec,dvec,cHvec,cLvec)
 
 # Save the combined array to a file
-writedlm("./thesis/all_vectors.txt", all_data, ',')
+writedlm("all_vectors.txt", all_data, ',')
 rmprocs(workers())
