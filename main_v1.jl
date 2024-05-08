@@ -247,7 +247,7 @@ end
 params = [3.0,0.40,0.15,0.80, 0.20, 0.80, 2.0, 1.5,1.065,0.94] 
 yn = 10000
 τn = 10000
-cn = 200
+cn = 300
 
 # Grids
 y_grid = collect(range(0.10,stop=0.50,length=yn))
