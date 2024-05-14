@@ -1,15 +1,7 @@
-
 using Distributed, DelimitedFiles, BenchmarkTools
-using LaTeXStrings,  Parameters
+using LaTeXStrings, Parameters
 # using GR
 # gr(label=false)
-
-# Set the number of worker processes
-num_workers = 1  # You can adjust this based on your available cores
-
-# Add processes
-addprocs(num_workers)
-
 
 #region: Utility functions
 @everywhere begin
@@ -88,141 +80,126 @@ addprocs(num_workers)
 
     #endregion
 end
-
 #region: Optimized function
 function optimize_function(obj_function, params, y_grid, τ_grid, cn)
     γ, ψ, λ, π_H, π_L,r,ω,RH,RL,β = params 
     max_values = Dict()
-
-    @sync begin
-        worker_results = Vector{Future}()
-        for i in 1:num_workers
-            push!(worker_results, @spawn begin
-                local results = Dict()
-                for τ in τ_grid
-                    max_value = -Inf
-                    max_d_1 = 0.0
-                    max_d_2 = 0.0
-                    max_c21H = 0.0
-                    max_c22H = 0.0
-                    max_c21L = 0.0
-                    max_c22L = 0.0
-                    max_y = 0.0
-                    for y in y_grid
-                        d_1_range = LinRange(0.01 * y / λ , 0.99 * y / λ, cn)
-                        # d_2_range = LinRange(max(ψ, 0.01*(y/λ)),max(ψ,0.99*y/λ), cn)
-                        #d_2_range = LinRange(0.1, y/λ, cn)
-                        c21H_range = LinRange(0.01 * RH * (ω - y) / (1 - λ) , 0.99 * RH * (ω - y) / (1 - λ), cn)
-                        # c22H_range = LinRange(max(ψ,0.01*(RH * (ω - y) / (1 - λ))),max(ψ,0.99*RH * (ω - y) / ((1 - λ))), cn)
-                        #c22H_range = LinRange(0.1, RH * (ω - y) / ((1 - λ)), cn)
-                        if obj_function == objective_function  # Adjust for case 1
-                            c21L_range = LinRange(0.01 * RL * (ω - y) / (1 - λ) , 0.99 * RL * (ω - y) / (1 - λ), cn)
-                            # c22L_range = LinRange(max(ψ,0.01*(RH * (ω - y) / (1 - λ))),max(ψ,0.99*RH * (ω - y) / ((1 - λ))), cn)
-                            # c22L_range = LinRange(0.1,RL * (ω - y) / ((1 - λ)), cn)
-                            for d_1 in d_1_range, c21H in c21H_range, c21L in c21L_range
-                                value = obj_function(d_1, (y/λ) - d_1, c21H, (RH * (ω-y)/(1-λ)) - c21H, c21L, (RL * (ω-y)/(1-λ)) - c21L, τ, y, params)
-                                # value = obj_function(d_1, d_2, c21H, c22H, c21L, c22L, τ, y, params)
-                                if value > max_value
-                                    max_value = value
-                                    max_d_1 = d_1
-                                    max_d_2 = (y/λ) - d_1
-                                    max_c21H = c21H
-                                    max_c22H = (RH * (ω-y)/(1-λ)) - c21H
-                                    max_c21L = c21L
-                                    max_c22L =  (RL * (ω-y)/(1-λ)) - c21L
-                                    max_y = y
-                                    # max_value = value
-                                    # max_d_1 = d_1
-                                    # max_d_2 = d_2
-                                    # max_c21H = c21H
-                                    # max_c22H = c22H
-                                    # max_c21L = c21L
-                                    # max_c22L = c22L
-                                    # max_y = y
-                                end
-                            end
-                        else
-                            if obj_function == objective_function2                             
-                                for d_1 in d_1_range, c21H in c21H_range
-                                    value = obj_function(d_1, (y/λ) - d_1, c21H, (RH * (ω-y)/(1-λ) - c21H), d_1*(r*(ω-y)+y)/(d_1+(y/λ) - d_1), ((y/λ) - d_1)*(r*(ω-y)+y)/(d_1+(y/λ) - d_1), τ, y, params)
-                                    # value = obj_function(d_1,d_2, c21H,c22H, d_1*(r*(ω-y)+y)/(d_1+d_2), (d_2)*(r*(ω-y)+y)/(d_1+d_2), τ, y, params)
-                                    if value > max_value
-                                        max_value = value
-                                        max_d_1 = d_1
-                                        max_d_2 = (y/λ) - d_1
-                                        max_c21H = c21H
-                                        max_c22H = (RH * (ω-y)/(1-λ)) - c21H
-                                        max_c21L = d_1*(r*(ω-y)+y)/(d_1+(y/λ) - d_1)
-                                        max_c22L = ((y/λ) - d_1)*(r*(ω-y)+y)/(d_1+(y/λ) - d_1)
-                                        max_y = y
-                                        # max_value = value
-                                        # max_d_1 = d_1
-                                        # max_d_2 = d_2
-                                        # max_c21H = c21H
-                                        # max_c22H = c22H
-                                        # max_c21L = c21L
-                                        # max_c22L = c22L
-                                        # max_y = y
-                                    end
-                                end
-                            elseif obj_function == objective_function3
-                                for d_1 in d_1_range, c21H in c21H_range
-                                    value = obj_function(d_1, (y/λ) - d_1, c21H, (RH * (ω-y)/(1-λ)) - c21H, λ*d_1*(r*(ω-y)+y)/(λ*d_1+(y/λ) - d_1), ((y/λ) - d_1)*(r*(ω-y)+y)/(λ*d_1+(y/λ) - d_1), τ, y, params)
-                                    # value = obj_function(d_1, d_2, c21H, c22H, λ*d_1*(r*(ω-y)+y)/(λ*d_1+d_2), (d_2)*(r*(ω-y)+y)/(λ*d_1+ d_2), τ, y, params)
-                                    if value > max_value
-                                        max_value = value
-                                        max_d_1 = d_1
-                                        max_d_2 = (y/λ) - d_1
-                                        max_c21H = c21H
-                                        max_c22H =(RH * (ω-y)/(1-λ)) - c21H
-                                        max_c21L = λ*d_1*(r*(ω-y)+y)/(λ*d_1+(y/λ) - d_1)
-                                        max_c22L = ((y/λ) - d_1)*(r*(ω-y)+y)/(λ*d_1+(y/λ) - d_1)
-                                        max_y = y
-                                        # max_value = value
-                                        # max_d_1 = d_1
-                                        # max_d_2 = d_2
-                                        # max_c21H = c21H
-                                        # max_c22H = c22H
-                                        # max_c21L = c21L
-                                        # max_c22L = c22L
-                                        # max_y = y
-                                    end
-                                end
-                            elseif obj_function == objective_function4
-                                for d_1 in d_1_range, c21H in c21H_range
-                                    value = obj_function(d_1, (y/λ) - d_1, c21H, (RH * (ω-y)/(1-λ)) - c21H, d_1*(r*(ω-y)+y)/(d_1+λ*((y/λ) - d_1)),λ*((y/λ) - d_1)*(r*(ω-y)+y)/(d_1+λ*((y/λ) - d_1)), τ, y,params)
-                                    # value = obj_function(d_1,d_2, c21H, c22H, d_1*(r*(ω-y)+y)/(d_1+λ*d_2),λ*(d_2)*(r*(ω-y)+y)/(d_1+λ*d_2), τ, y,params)
-                                    if value > max_value
-                                        max_value = value
-                                        max_d_1 = d_1
-                                        max_d_2 = (y/λ) - d_1
-                                        max_c21H = c21H
-                                        max_c22H = (RH * (ω-y)/(1-λ)) - c21H
-                                        max_c21L = d_1*(r*(ω-y)+y)/(d_1+λ*((y/λ) - d_1))
-                                        max_c22L = λ*((y/λ) - d_1)*(r*(ω-y)+y)/(d_1+λ*((y/λ) - d_1))
-                                        max_y = y
-                                        # max_value = value
-                                        # max_d_1 = d_1
-                                        # max_d_2 = d_2
-                                        # max_c21H = c21H
-                                        # max_c22H = c22H
-                                        # max_c21L = c21L
-                                        # max_c22L = c22L
-                                        # max_y = y
-                                    end
-                                end                                
-                            end
+    Threads.@threads for τ in τ_grid
+        max_value = -Inf
+        max_d_1 = 0.0
+        max_d_2 = 0.0
+        max_c21H = 0.0
+        max_c22H = 0.0
+        max_c21L = 0.0
+        max_c22L = 0.0
+        max_y = 0.0
+        for y in y_grid
+            d_1_range = LinRange(0.01 * y / λ , 0.99 * y / λ, cn)
+            # d_2_range = LinRange(max(ψ, 0.01*(y/λ)),max(ψ,0.99*y/λ), cn)
+            #d_2_range = LinRange(0.1, y/λ, cn)
+            c21H_range = LinRange(0.01 * RH * (ω - y) / (1 - λ) , 0.99 * RH * (ω - y) / (1 - λ), cn)
+            # c22H_range = LinRange(max(ψ,0.01*(RH * (ω - y) / (1 - λ))),max(ψ,0.99*RH * (ω - y) / ((1 - λ))), cn)
+            #c22H_range = LinRange(0.1, RH * (ω - y) / ((1 - λ)), cn)
+            if obj_function == objective_function  # Adjust for case 1
+                c21L_range = LinRange(0.01 * RL * (ω - y) / (1 - λ) , 0.99 * RL * (ω - y) / (1 - λ), cn)
+                # c22L_range = LinRange(max(ψ,0.01*(RH * (ω - y) / (1 - λ))),max(ψ,0.99*RH * (ω - y) / ((1 - λ))), cn)
+                # c22L_range = LinRange(0.1,RL * (ω - y) / ((1 - λ)), cn)
+                for d_1 in d_1_range, c21H in c21H_range, c21L in c21L_range
+                    value = obj_function(d_1, (y/λ) - d_1, c21H, (RH * (ω-y)/(1-λ)) - c21H, c21L, (RL * (ω-y)/(1-λ)) - c21L, τ, y, params)
+                    # value = obj_function(d_1, d_2, c21H, c22H, c21L, c22L, τ, y, params)
+                    if value > max_value
+                        max_value = value
+                        max_d_1 = d_1
+                        max_d_2 = (y/λ) - d_1
+                        max_c21H = c21H
+                        max_c22H = (RH * (ω-y)/(1-λ)) - c21H
+                        max_c21L = c21L
+                        max_c22L =  (RL * (ω-y)/(1-λ)) - c21L
+                        max_y = y
+                        # max_value = value
+                        # max_d_1 = d_1
+                        # max_d_2 = d_2
+                        # max_c21H = c21H
+                        # max_c22H = c22H
+                        # max_c21L = c21L
+                        # max_c22L = c22L
+                        # max_y = y
+                    end
+                end
+            else
+                if obj_function == objective_function2                             
+                    for d_1 in d_1_range, c21H in c21H_range
+                        value = obj_function(d_1, (y/λ) - d_1, c21H, (RH * (ω-y)/(1-λ) - c21H), d_1*(r*(ω-y)+y)/(d_1+(y/λ) - d_1), ((y/λ) - d_1)*(r*(ω-y)+y)/(d_1+(y/λ) - d_1), τ, y, params)
+                        # value = obj_function(d_1,d_2, c21H,c22H, d_1*(r*(ω-y)+y)/(d_1+d_2), (d_2)*(r*(ω-y)+y)/(d_1+d_2), τ, y, params)
+                        if value > max_value
+                            max_value = value
+                            max_d_1 = d_1
+                            max_d_2 = (y/λ) - d_1
+                            max_c21H = c21H
+                            max_c22H = (RH * (ω-y)/(1-λ)) - c21H
+                            max_c21L = d_1*(r*(ω-y)+y)/(d_1+(y/λ) - d_1)
+                            max_c22L = ((y/λ) - d_1)*(r*(ω-y)+y)/(d_1+(y/λ) - d_1)
+                            max_y = y
+                            # max_value = value
+                            # max_d_1 = d_1
+                            # max_d_2 = d_2
+                            # max_c21H = c21H
+                            # max_c22H = c22H
+                            # max_c21L = c21L
+                            # max_c22L = c22L
+                            # max_y = y
                         end
                     end
-                    results[τ] = (max_value, max_d_1, max_d_2, max_c21H, max_c22H, max_c21L, max_c22L, max_y)
+                elseif obj_function == objective_function3
+                    for d_1 in d_1_range, c21H in c21H_range
+                        value = obj_function(d_1, (y/λ) - d_1, c21H, (RH * (ω-y)/(1-λ)) - c21H, λ*d_1*(r*(ω-y)+y)/(λ*d_1+(y/λ) - d_1), ((y/λ) - d_1)*(r*(ω-y)+y)/(λ*d_1+(y/λ) - d_1), τ, y, params)
+                        # value = obj_function(d_1, d_2, c21H, c22H, λ*d_1*(r*(ω-y)+y)/(λ*d_1+d_2), (d_2)*(r*(ω-y)+y)/(λ*d_1+ d_2), τ, y, params)
+                        if value > max_value
+                            max_value = value
+                            max_d_1 = d_1
+                            max_d_2 = (y/λ) - d_1
+                            max_c21H = c21H
+                            max_c22H =(RH * (ω-y)/(1-λ)) - c21H
+                            max_c21L = λ*d_1*(r*(ω-y)+y)/(λ*d_1+(y/λ) - d_1)
+                            max_c22L = ((y/λ) - d_1)*(r*(ω-y)+y)/(λ*d_1+(y/λ) - d_1)
+                            max_y = y
+                            # max_value = value
+                            # max_d_1 = d_1
+                            # max_d_2 = d_2
+                            # max_c21H = c21H
+                            # max_c22H = c22H
+                            # max_c21L = c21L
+                            # max_c22L = c22L
+                            # max_y = y
+                        end
+                    end
+                elseif obj_function == objective_function4
+                    for d_1 in d_1_range, c21H in c21H_range
+                        value = obj_function(d_1, (y/λ) - d_1, c21H, (RH * (ω-y)/(1-λ)) - c21H, d_1*(r*(ω-y)+y)/(d_1+λ*((y/λ) - d_1)),λ*((y/λ) - d_1)*(r*(ω-y)+y)/(d_1+λ*((y/λ) - d_1)), τ, y,params)
+                        # value = obj_function(d_1,d_2, c21H, c22H, d_1*(r*(ω-y)+y)/(d_1+λ*d_2),λ*(d_2)*(r*(ω-y)+y)/(d_1+λ*d_2), τ, y,params)
+                        if value > max_value
+                            max_value = value
+                            max_d_1 = d_1
+                            max_d_2 = (y/λ) - d_1
+                            max_c21H = c21H
+                            max_c22H = (RH * (ω-y)/(1-λ)) - c21H
+                            max_c21L = d_1*(r*(ω-y)+y)/(d_1+λ*((y/λ) - d_1))
+                            max_c22L = λ*((y/λ) - d_1)*(r*(ω-y)+y)/(d_1+λ*((y/λ) - d_1))
+                            max_y = y
+                            # max_value = value
+                            # max_d_1 = d_1
+                            # max_d_2 = d_2
+                            # max_c21H = c21H
+                            # max_c22H = c22H
+                            # max_c21L = c21L
+                            # max_c22L = c22L
+                            # max_y = y
+                        end
+                    end                                
                 end
-                results
-            end)
+            end
         end
-        for future in worker_results
-            worker_result = fetch(future)
-            merge!(max_values, worker_result)
-        end
+        max_values[τ] = (max_value, max_d_1, max_d_2, max_c21H, max_c22H, max_c21L, max_c22L, max_y)
     end
 
     τ_values = sort(collect(keys(max_values)))
@@ -232,7 +209,7 @@ function optimize_function(obj_function, params, y_grid, τ_grid, cn)
     max_d1_values = [max_values[τ][2] for τ in τ_values]
     max_c21H_values = [max_values[τ][4] for τ in τ_values]
     max_c21L_values = [max_values[τ][6] for τ in τ_values]
-    
+
 
     max_d2_values = [max_values[τ][3] for τ in τ_values]
     max_c22H_values = [max_values[τ][5] for τ in τ_values]
@@ -327,4 +304,3 @@ all_data = hcat(τ_grid, util, wavec, prob, yvec,dvec,cHvec,cLvec)
 
 # Save the combined array to a file
 writedlm("all_vectors.txt", all_data, ',')
-rmprocs(workers())
