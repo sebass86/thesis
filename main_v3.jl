@@ -83,8 +83,10 @@ end
 #region: Optimized function
 function optimize_function(obj_function, params, y_grid, τ_grid, cn)
     γ, ψ, λ, π_H, π_L,r,ω,RH,RL,β = params 
-    max_values = Dict()
-    Threads.@threads for τ in τ_grid
+    results = Array{Any}(undef,length(τ_grid)) 
+
+    Threads.@threads for i in 1:length(τ_grid)
+        τ = τ_grid[i]
         max_value = -Inf
         max_d_1 = 0.0
         max_d_2 = 0.0
@@ -93,6 +95,8 @@ function optimize_function(obj_function, params, y_grid, τ_grid, cn)
         max_c21L = 0.0
         max_c22L = 0.0
         max_y = 0.0
+
+        local_max_values=Dict()
         for y in y_grid
             d_1_range = LinRange(0.01 * y / λ , 0.99 * y / λ, cn)
             # d_2_range = LinRange(max(ψ, 0.01*(y/λ)),max(ψ,0.99*y/λ), cn)
@@ -199,22 +203,41 @@ function optimize_function(obj_function, params, y_grid, τ_grid, cn)
                 end
             end
         end
-        max_values[τ] = (max_value, max_d_1, max_d_2, max_c21H, max_c22H, max_c21L, max_c22L, max_y)
+        # local_max_values[τ] = (max_value, max_d_1, max_d_2, max_c21H, max_c22H, max_c21L, max_c22L, max_y)
+        # results[i] = local_max_values
+        results[i] = (τ, max_value, max_d_1, max_d_2, max_c21H, max_c22H, max_c21L, max_c22L, max_y)
     end
 
-    τ_values = sort(collect(keys(max_values)))
-    max_utility_values = [value == -Inf ? NaN : value for (τ, value) in zip(τ_values, [max_values[τ][1] for τ in τ_values])]
-    max_y_values = [max_values[τ][8] for τ in τ_values]
+    # max_values = Dict()
+    # for res in results
+    #     merge!(max_values,res)
+    # end
 
-    max_d1_values = [max_values[τ][2] for τ in τ_values]
-    max_c21H_values = [max_values[τ][4] for τ in τ_values]
-    max_c21L_values = [max_values[τ][6] for τ in τ_values]
+    # τ_values = sort(collect(keys(max_values)))
+    # max_utility_values = [value == -Inf ? NaN : value for (τ, value) in zip(τ_values, [max_values[τ][1] for τ in τ_values])]
+    # max_y_values = [max_values[τ][8] for τ in τ_values]
+
+    # max_d1_values = [max_values[τ][2] for τ in τ_values]
+    # max_c21H_values = [max_values[τ][4] for τ in τ_values]
+    # max_c21L_values = [max_values[τ][6] for τ in τ_values]
 
 
-    max_d2_values = [max_values[τ][3] for τ in τ_values]
-    max_c22H_values = [max_values[τ][5] for τ in τ_values]
-    max_c22L_values = [max_values[τ][7] for τ in τ_values]
-
+    # max_d2_values = [max_values[τ][3] for τ in τ_values]
+    # max_c22H_values = [max_values[τ][5] for τ in τ_values]
+    # max_c22L_values = [max_values[τ][7] for τ in τ_values]
+    τ_values, max_utility_values, max_d1_values, max_c21H_values, max_c21L_values, max_d2_values, max_c22H_values, max_c22L_values, max_y_values = [], [], [], [], [], [], [], [], []
+    
+    for result in results
+        push!(τ_values, result[1])
+        push!(max_utility_values, result[2] == -Inf ? NaN : result[2])
+        push!(max_d1_values,result[3])
+        push!(max_d2_values,result[4])
+        push!(max_c21H_values,result[5])
+        push!(max_c22H_values,result[6])
+        push!(max_c21L_values,result[7])
+        push!(max_c22L_values,result[8])
+        push!(max_y_values,result[9])
+    end
     return τ_values, max_utility_values, max_d1_values, max_c21H_values, max_c21L_values, max_d2_values, max_c22H_values, max_c22L_values, max_y_values
 end
 #endregion
@@ -222,15 +245,16 @@ end
 # Parameters
 #   params = [γ, ψ, λ, π_H, π_L, r,ω,RH,RL]  # Set your parameter values here
 params = [3.0,0.40,0.15,0.80, 0.20, 0.80, 2.0, 1.5,1.065,0.94] 
-yn = 100
-τn = 10
-cn = 200
+yn = 1000
+τn = 1000
+cn = 400
 
 # Grids
 y_grid = collect(range(0.10,stop=0.50,length=yn))
 
 τ_grid = collect(range(0.30, stop=0.90,length=τn))  
 
+println(Threads.nthreads())
 
 util=zeros(τn,4)
 # Call the optimization functions for different cases
